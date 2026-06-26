@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Dashboard — FY 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0A0C10;
+    --surface:  #111418;
+    --border:   #1E2228;
+    --muted:    #3A3F4A;
+    --text:     #E8EBF0;
+    --sub:      #6B7180;
+    --accent:   #00D4FF;
+    --green:    #00E5A0;
+    --amber:    #FFB547;
+    --red:      #FF5566;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+
+  /* ── Scan line overlay ── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* ── Wrapper ── */
+  #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── Top bar ── */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .tb-left { display: flex; align-items: center; gap: 14px; }
+  .logo-mark {
+    width: 32px; height: 32px; border: 1.5px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 600;
+    position: relative;
+  }
+  .logo-mark::before {
+    content: '';
+    position: absolute; inset: 3px;
+    border: 1px solid rgba(0,212,255,.3);
+  }
+  .title-block { display: flex; flex-direction: column; gap: 1px; }
+  .title-main { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .title-sub  { font-size: 10px; color: var(--sub); font-family: var(--mono); letter-spacing: .04em; }
+
+  .tb-right { display: flex; align-items: center; gap: 20px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 10px; color: var(--green);
+    border: 1px solid rgba(0,229,160,.25); padding: 4px 10px; border-radius: 2px;
+  }
+  .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  .tb-clock { font-family: var(--mono); font-size: 11px; color: var(--sub); }
+
+  /* ── Main content ── */
+  #main { flex: 1; display: grid; grid-template-columns: 220px 1fr 280px; grid-template-rows: 1fr; overflow: hidden; }
+
+  /* ── Left nav ── */
+  #leftnav { border-right: 1px solid var(--border); padding: 20px 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; background: var(--surface); }
+  .nav-section { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; padding: 12px 20px 4px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px; font-size: 12px; color: var(--sub); cursor: pointer;
+    border-left: 2px solid transparent; transition: all .15s;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(0,212,255,.06); }
+  .nav-icon { font-family: var(--mono); font-size: 10px; width: 14px; text-align: center; }
+  .nav-badge {
+    margin-left: auto; background: rgba(255,85,102,.2); color: var(--red);
+    border-radius: 2px; padding: 1px 5px; font-family: var(--mono); font-size: 9px;
+  }
+  .nav-badge.g { background: rgba(0,229,160,.15); color: var(--green); }
+
+  /* ── Center content ── */
+  #center { overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Score header */
+  .score-header {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+  }
+  .score-card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 18px 20px; position: relative; overflow: hidden;
+    opacity: 0; transform: translateY(12px);
+    animation: fadeUp .4s ease forwards;
+  }
+  .score-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .score-card.c1::before { background: var(--accent); }
+  .score-card.c2::before { background: var(--green); }
+  .score-card.c3::before { background: var(--amber); }
+  .score-card.c4::before { background: var(--red); }
+  .score-card:nth-child(2){animation-delay:.08s}
+  .score-card:nth-child(3){animation-delay:.16s}
+  .score-card:nth-child(4){animation-delay:.24s}
+
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+
+  .sc-label { font-size: 10px; color: var(--sub); text-transform: uppercase; letter-spacing: .06em; font-family: var(--mono); }
+  .sc-value { font-family: var(--mono); font-size: 32px; font-weight: 600; margin: 6px 0 4px; }
+  .sc-value.c1 { color: var(--accent); }
+  .sc-value.c2 { color: var(--green); }
+  .sc-value.c3 { color: var(--amber); }
+  .sc-value.c4 { color: var(--red); }
+  .sc-delta { font-size: 10px; font-family: var(--mono); }
+  .up { color: var(--green); }
+  .dn { color: var(--red); }
+
+  /* Panel */
+  .panel { background: var(--surface); border: 1px solid var(--border); }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  .ph-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--sub); font-family: var(--mono); }
+  .ph-action { font-size: 10px; font-family: var(--mono); color: var(--accent); cursor: pointer; }
+
+  /* Risk matrix */
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .risk-cell {
+    padding: 14px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .risk-cell:nth-child(2n) { border-right: 0; }
+  .risk-cell:nth-child(n+3) { border-bottom: 0; }
+  .rc-label { font-size: 9px; font-family: var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .08em; }
+  .rc-bar-row { display: flex; align-items: center; gap: 8px; }
+  .rc-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 0; }
+  .rc-bar { height: 4px; border-radius: 0; transition: width 1.2s cubic-bezier(.22,1,.36,1); }
+  .rc-pct { font-family: var(--mono); font-size: 10px; width: 30px; text-align: right; }
+
+  /* Findings table */
+  .findings-table { width: 100%; border-collapse: collapse; }
+  .findings-table th {
+    font-size: 9px; font-family: var(--mono); color: var(--sub); text-transform: uppercase;
+    letter-spacing: .08em; padding: 10px 18px; text-align: left; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .findings-table td { font-size: 11px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .findings-table tr:last-child td { border-bottom: 0; }
+  .findings-table tr:hover td { background: rgba(255,255,255,.025); }
+  .sev {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: 1px;
+  }
+  .sev.H { background: rgba(255,85,102,.15); color: var(--red); border: 1px solid rgba(255,85,102,.3); }
+  .sev.M { background: rgba(255,181,71,.12); color: var(--amber); border: 1px solid rgba(255,181,71,.3); }
+  .sev.L { background: rgba(0,229,160,.1); color: var(--green); border: 1px solid rgba(0,229,160,.25); }
+  .sev.C { background: rgba(0,212,255,.1); color: var(--accent); border: 1px solid rgba(0,212,255,.25); }
+
+  /* Sparkline area */
+  .spark-row { padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  canvas#spark { width: 100%; height: 80px; display: block; }
+
+  /* ── Right panel ── */
+  #right { border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; background: var(--surface); }
+  .rp-section { border-bottom: 1px solid var(--border); padding: 18px; }
+  .rp-title { font-size: 10px; font-family: var(--mono); color: var(--sub); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; }
+
+  /* Gauge */
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  canvas#gauge { width: 140px; height: 80px; }
+  .gauge-label { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--green); }
+  .gauge-sub { font-size: 10px; color: var(--sub); }
+
+  /* Checklist */
+  .check-item { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+  .check-box {
+    width: 14px; height: 14px; border: 1px solid var(--border); flex-shrink: 0; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center; font-size: 8px;
+  }
+  .check-box.done { border-color: var(--green); color: var(--green); background: rgba(0,229,160,.08); }
+  .check-box.warn { border-color: var(--amber); color: var(--amber); background: rgba(255,181,71,.08); }
+  .check-box.fail { border-color: var(--red); color: var(--red); background: rgba(255,85,102,.08); }
+  .check-text { font-size: 11px; line-height: 1.4; }
+  .check-note { font-size: 9px; color: var(--sub); font-family: var(--mono); margin-top: 2px; }
+
+  /* Timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-item { display: flex; gap: 12px; padding: 8px 0; }
+  .tl-line { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .tl-rule { flex: 1; width: 1px; background: var(--border); min-height: 12px; }
+  .tl-item:last-child .tl-rule { display: none; }
+  .tl-body { flex: 1; padding-bottom: 4px; }
+  .tl-action { font-size: 11px; font-weight: 500; }
+  .tl-meta { font-size: 9px; font-family: var(--mono); color: var(--sub); margin-top: 2px; }
+
+  /* ── Video playback bar ── */
+  #playbar {
+    height: 48px; background: #080A0D; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; padding: 0 24px;
+    flex-shrink: 0;
+  }
+  .pb-btn {
+    width: 28px; height: 28px; border: 1px solid var(--border); background: transparent;
+    color: var(--text); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, color .15s;
+  }
+  .pb-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pb-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,.1); }
+  .scrub-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
+  .scrub { flex: 1; height: 3px; background: var(--border); position: relative; cursor: pointer; border-radius: 0; }
+  .scrub-fill { height: 3px; background: var(--accent); position: absolute; left: 0; top: 0; border-radius: 0; transition: width .5s linear; }
+  .scrub-head {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+    position: absolute; top: 50%; transform: translate(-50%,-50%);
+    box-shadow: 0 0 8px var(--accent); transition: left .5s linear;
+  }
+  .pb-time { font-family: var(--mono); font-size: 10px; color: var(--sub); white-space: nowrap; }
+  .pb-speed { font-family: var(--mono); font-size: 9px; color: var(--sub); border: 1px solid var(--border); padding: 3px 7px; cursor: pointer; }
+
+  /* Recording dot */
+  .rec-dot { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 9px; color: var(--red); margin-left: 8px; }
+  .rec-d { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: pulse 1s ease-in-out infinite; }
+
+  /* Animated number counter */
+  .counter { display: inline-block; }
+
+  /* Reveal animations for center sections */
+  .reveal { opacity: 0; transform: translateY(8px); animation: fadeUp .5s ease forwards; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="tb-left">
+      <div class="logo-mark">AX</div>
+      <div class="title-block">
+        <div class="title-main">AuditEx Platform</div>
+        <div class="title-sub">FY-2026 · Q2 Internal Audit · v4.1.3</div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <div class="status-pill"><span class="pulse"></span>LIVE SESSION</div>
+      <div class="rec-dot"><span class="rec-d"></span>REC</div>
+      <div class="tb-clock" id="clock">--:--:--</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- LEFT NAV -->
+    <div id="leftnav">
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active"><span class="nav-icon">◈</span>Dashboard</div>
+      <div class="nav-item"><span class="nav-icon">◎</span>Risk Register<span class="nav-badge">12</span></div>
+      <div class="nav-item"><span class="nav-icon">≡</span>Findings</div>
+
+      <div class="nav-section">Audit Areas</div>
+      <div class="nav-item"><span class="nav-icon">▷</span>Financial Controls<span class="nav-badge g">✓</span></div>
+      <div class="nav-item"><span class="nav-icon">▷</span>IT & Cybersecurity<span class="nav-badge">3</span></div>
+      <div class="nav-item"><span class="nav-icon">▷</span>Compliance<span class="nav-badge">2</span></div>
+      <div class="nav-item"><span class="nav-icon">▷</span>Procurement</div>
+      <div class="nav-item"><span class="nav-icon">▷</span>HR & Payroll</div>
+      <div class="nav-item"><span class="nav-icon">▷</span>Operations</div>
+
+      <div class="nav-section">Reports</div>
+      <div class="nav-item"><span class="nav-icon">⬡</span>Draft Report</div>
+      <div class="nav-item"><span class="nav-icon">⬡</span>Management Letter</div>
+      <div class="nav-item"><span class="nav-icon">⬡</span>Evidence Vault</div>
+
+      <div class="nav-section">Settings</div>
+      <div class="nav-item"><span class="nav-icon">◇</span>Team & Roles</div>
+      <div class="nav-item"><span class="nav-icon">◇</span>Audit Program</div>
+    </div>
+
+    <!-- CENTER -->
+    <div id="center">
+
+      <!-- KPI Cards -->
+      <div class="score-header">
+        <div class="score-card c1">
+          <div class="sc-label">Risk Score</div>
+          <div class="sc-value c1 counter" id="kpi1">--</div>
+          <div class="sc-delta dn">▲ 4 pts from Q1</div>
+        </div>
+        <div class="score-card c2">
+          <div class="sc-label">Controls Tested</div>
+          <div class="sc-value c2 counter" id="kpi2">--</div>
+          <div class="sc-delta up">▲ 18 vs target</div>
+        </div>
+        <div class="score-card c3">
+          <div class="sc-label">Open Findings</div>
+          <div class="sc-value c3 counter" id="kpi3">--</div>
+          <div class="sc-delta dn">▼ 3 closed this week</div>
+        </div>
+        <div class="score-card c4">
+          <div class="sc-label">Critical Issues</div>
+          <div class="sc-value c4 counter" id="kpi4">--</div>
+          <div class="sc-delta dn">⚠ Requires immediate action</div>
+        </div>
+      </div>
+
+      <!-- Trend sparkline -->
+      <div class="panel reveal" style="animation-delay:.3s">
+        <div class="panel-head">
+          <span class="ph-title">Risk Score — 12-Month Trend</span>
+          <span class="ph-action">EXPORT ↗</span>
+        </div>
+        <div class="spark-row">
+          <canvas id="spark" width="600" height="80"></canvas>
+        </div>
+      </div>
+
+      <!-- Risk matrix + Findings split -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+        <div class="panel reveal" style="animation-delay:.4s">
+          <div class="panel-head">
+            <span class="ph-title">Risk by Category</span>
+            <span class="ph-action">DRILL →</span>
+          </div>
+          <div class="risk-grid" id="riskgrid">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <div class="panel reveal" style="animation-delay:.5s">
+          <div class="panel-head">
+            <span class="ph-title">Audit Completion</span>
+          </div>
+          <div style="padding:18px; display:flex; flex-direction:column; gap:12px;">
+            <!-- Donut replaced with horizontal bars for HTML5 canvas simplicity -->
+            <canvas id="donut" width="240" height="240" style="display:block;margin:0 auto;width:180px;height:180px;"></canvas>
+            <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;">
+              <span style="font-family:var(--mono);font-size:10px;color:var(--green);">■ Complete 68%</span>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--amber);">■ In Progress 22%</span>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--muted);">■ Pending 10%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Findings table -->
+      <div class="panel reveal" style="animation-delay:.6s">
+        <div class="panel-head">
+          <span class="ph-title">Recent Findings</span>
+          <span class="ph-action">VIEW ALL (47)</span>
+        </div>
+        <table class="findings-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Area</th><th>Finding</th><th>Severity</th><th>Owner</th><th>Due</th>
+            </tr>
+          </thead>
+          <tbody id="ftbody"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div id="right">
+
+      <div class="rp-section">
+        <div class="rp-title">Compliance Score</div>
+        <div class="gauge-wrap">
+          <canvas id="gauge" width="200" height="110"></canvas>
+          <div class="gauge-label">84%</div>
+          <div class="gauge-sub">SOX · ISO 27001 · GDPR</div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-title">Control Effectiveness</div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="checklist"></div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-title">Audit Timeline</div>
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-title">Assigned Auditors</div>
+        <div style="display:flex;flex-direction:column;gap:10px;" id="auditors"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PLAYBACK BAR -->
+  <div id="playbar">
+    <button class="pb-btn active" id="playBtn">▶</button>
+    <button class="pb-btn" id="pauseBtn">⏸</button>
+    <button class="pb-btn" onclick="">⏹</button>
+    <div class="scrub-wrap">
+      <div class="pb-time" id="elapsed">00:00</div>
+      <div class="scrub" id="scrub">
+        <div class="scrub-fill" id="scrubFill" style="width:0%"></div>
+        <div class="scrub-head" id="scrubHead" style="left:0%"></div>
+      </div>
+      <div class="pb-time">08:42</div>
+    </div>
+    <div class="pb-speed" id="speedBtn">1×</div>
+    <div class="rec-dot" style="margin-left:auto;"><span class="rec-d"></span> RECORDING AUDIT SESSION</div>
+  </div>
+
+</div>
+
+<script>
+// ── Clock ──
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=
+    [n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
+}
+setInterval(updateClock,1000); updateClock();
+
+// ── Animated counters ──
+function animCount(el,target,suffix='',duration=1200){
+  const start=performance.now();
+  function step(ts){
+    const p=Math.min((ts-start)/duration,1);
+    const ease=1-Math.pow(1-p,3);
+    el.textContent=Math.round(ease*target)+suffix;
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+setTimeout(()=>{
+  animCount(document.getElementById('kpi1'),72);
+  animCount(document.getElementById('kpi2'),134);
+  animCount(document.getElementById('kpi3'),47);
+  animCount(document.getElementById('kpi4'),5);
+},400);
+
+// ── Sparkline ──
+function drawSparkline(){
+  const cv=document.getElementById('spark');
+  const ctx=cv.getContext('2d');
+  cv.width=cv.offsetWidth||600; cv.height=80;
+  const pts=[68,71,65,74,70,77,73,80,76,72,69,72];
+  const W=cv.width, H=cv.height, pad=16;
+  const maxV=Math.max(...pts)+5, minV=Math.min(...pts)-5;
+  const sx=i=>(i/(pts.length-1))*(W-pad*2)+pad;
+  const sy=v=>H-pad-((v-minV)/(maxV-minV))*(H-pad*2);
+
+  // Grid lines
+  ctx.strokeStyle='#1E2228'; ctx.lineWidth=1;
+  for(let i=0;i<4;i++){
+    const y=pad+(H-pad*2)/3*i;
+    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke();
+  }
+
+  // Area fill
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(0,212,255,.18)');
+  grad.addColorStop(1,'rgba(0,212,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.moveTo(sx(0),H-pad);
+  pts.forEach((v,i)=>ctx.lineTo(sx(i),sy(v)));
+  ctx.lineTo(sx(pts.length-1),H-pad);
+  ctx.closePath(); ctx.fill();
+
+  // Line
+  ctx.strokeStyle='#00D4FF'; ctx.lineWidth=1.5; ctx.lineJoin='round';
+  ctx.beginPath(); pts.forEach((v,i)=>i===0?ctx.moveTo(sx(i),sy(v)):ctx.lineTo(sx(i),sy(v)));
+  ctx.stroke();
+
+  // Dots + labels
+  pts.forEach((v,i)=>{
+    ctx.beginPath(); ctx.arc(sx(i),sy(v),3,0,Math.PI*2);
+    ctx.fillStyle='#00D4FF'; ctx.fill();
+    if(i%2===0){
+      ctx.fillStyle='#6B7180'; ctx.font='9px IBM Plex Mono,monospace';
+      ctx.textAlign='center'; ctx.fillText(v,sx(i),H-2);
+    }
+  });
+
+  // Month labels
+  const months=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+  ctx.fillStyle='#3A3F4A'; ctx.font='9px IBM Plex Mono,monospace';
+  months.forEach((m,i)=>{ ctx.textAlign='center'; ctx.fillText(m,sx(i),12); });
+}
+window.addEventListener('resize',drawSparkline);
+setTimeout(drawSparkline,100);
+
+// ── Risk bars ──
+const risks=[
+  {label:'Financial',pct:78,color:'#FF5566'},
+  {label:'IT / Cyber',pct:91,color:'#FF5566'},
+  {label:'Compliance',pct:55,color:'#FFB547'},
+  {label:'Operational',pct:43,color:'#00E5A0'},
+  {label:'HR & Payroll',pct:30,color:'#00E5A0'},
+  {label:'Procurement',pct:62,color:'#FFB547'},
+];
+const rg=document.getElementById('riskgrid');
+risks.forEach(r=>{
+  const div=document.createElement('div'); div.className='risk-cell';
+  div.innerHTML=`<div class="rc-label">${r.label}</div>
+  <div class="rc-bar-row">
+    <div class="rc-bar-bg"><div class="rc-bar" data-w="${r.pct}" style="width:0%;background:${r.color}"></div></div>
+    <div class="rc-pct" style="color:${r.color}">${r.pct}%</div>
+  </div>`;
+  rg.appendChild(div);
+});
+setTimeout(()=>{
+  document.querySelectorAll('.rc-bar').forEach(b=>{ b.style.width=b.dataset.w+'%'; });
+},600);
+
+// ── Donut chart ──
+function drawDonut(){
+  const cv=document.getElementById('donut');
+  const ctx=cv.getContext('2d');
+  const cx=cv.width/2, cy=cv.height/2, r=Math.min(cx,cy)-12, inner=r*.62;
+  const slices=[{v:.68,c:'#00E5A0'},{v:.22,c:'#FFB547'},{v:.10,c:'#3A3F4A'}];
+  let a=-Math.PI/2;
+  slices.forEach(s=>{
+    const sa=a, ea=a+s.v*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,sa,ea); ctx.closePath();
+    ctx.fillStyle=s.c; ctx.fill();
+    a=ea;
+  });
+  // Inner hole
+  ctx.beginPath(); ctx.arc(cx,cy,inner,0,Math.PI*2);
+  ctx.fillStyle='#111418'; ctx.fill();
+  // Center text
+  ctx.fillStyle='#E8EBF0'; ctx.font='bold 18px IBM Plex Mono,monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('68%',cx,cy-6);
+  ctx.fillStyle='#6B7180'; ctx.font='9px IBM Plex Mono,monospace';
+  ctx.fillText('COMPLETE',cx,cy+10);
+}
+setTimeout(drawDonut,200);
+
+// ── Gauge ──
+function drawGauge(){
+  const cv=document.getElementById('gauge');
+  const ctx=cv.getContext('2d');
+  const cx=cv.width/2, cy=cv.height-10, r=70;
+  // BG arc
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,0);
+  ctx.strokeStyle='#1E2228'; ctx.lineWidth=10; ctx.stroke();
+  // Fill arc 84%
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,Math.PI+(0.84*Math.PI));
+  const g=ctx.createLinearGradient(cx-r,cy,cx+r,cy);
+  g.addColorStop(0,'#FFB547'); g.addColorStop(.5,'#00E5A0'); g.addColorStop(1,'#00D4FF');
+  ctx.strokeStyle=g; ctx.lineWidth=10; ctx.lineCap='round'; ctx.stroke();
+}
+setTimeout(drawGauge,200);
+
+// ── Findings table ──
+const findings=[
+  {id:'F-2026-041',area:'IT Security',text:'MFA not enforced on 3 admin accounts',sev:'H',owner:'J. Walsh',due:'Jun 30'},
+  {id:'F-2026-038',area:'Financial',text:'Journal entry approval gap > $50K',sev:'H',owner:'A. Park',due:'Jul 05'},
+  {id:'F-2026-035',area:'Compliance',text:'GDPR retention policy outdated (2021)',sev:'M',owner:'K. Müller',due:'Jul 15'},
+  {id:'F-2026-031',area:'Procurement',text:'Vendor due diligence incomplete × 4',sev:'M',owner:'L. Torres',due:'Jul 22'},
+  {id:'F-2026-027',area:'HR',text:'Offboarding access removal > 48h',sev:'L',owner:'R. Singh',due:'Aug 01'},
+  {id:'F-2026-019',area:'Operations',text:'Disaster recovery test overdue',sev:'C',owner:'T. Okafor',due:'Jun 28'},
+];
+const sevColor={H:'H',M:'M',L:'L',C:'C'};
+const tb=document.getElementById('ftbody');
+findings.forEach((f,i)=>{
+  const tr=document.createElement('tr');
+  tr.style.cssText=`opacity:0;animation:fadeUp .4s ease ${.1*i+.7}s forwards`;
+  tr.innerHTML=`
+    <td style="font-family:var(--mono);font-size:10px;color:var(--sub)">${f.id}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--sub)">${f.area}</td>
+    <td>${f.text}</td>
+    <td><span class="sev ${sevColor[f.sev]}">${f.sev==='C'?'CRIT':f.sev==='H'?'HIGH':f.sev==='M'?'MED':'LOW'}</span></td>
+    <td style="font-size:10px;color:var(--sub)">${f.owner}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:${f.sev==='H'||f.sev==='C'?'var(--red)':'var(--sub)'}">${f.due}</td>
+  `;
+  tb.appendChild(tr);
+});
+
+// ── Checklist ──
+const checks=[
+  {label:'Access Control Review',note:'IAM roles verified × 312 accounts',state:'done'},
+  {label:'Segregation of Duties',note:'3 conflicts identified — remediation pending',state:'warn'},
+  {label:'Change Management Log',note:'Missing approval for CHG-4471',state:'fail'},
+  {label:'Backup Verification',note:'Last tested 2026-06-14 · PASS',state:'done'},
+  {label:'Encryption at Rest',note:'AES-256 confirmed all production DBs',state:'done'},
+  {label:'Vendor SLA Review',note:'2 vendors overdue on SOC2 reports',state:'warn'},
+];
+const cl=document.getElementById('checklist');
+const sym={done:'✓',warn:'!',fail:'✕'};
+checks.forEach(c=>{
+  const div=document.createElement('div'); div.className='check-item';
+  div.innerHTML=`<div class="check-box ${c.state}">${sym[c.state]}</div>
+  <div><div class="check-text">${c.label}</div><div class="check-note">${c.note}</div></div>`;
+  cl.appendChild(div);
+});
+
+// ── Timeline ──
+const events=[
+  {action:'Kick-off meeting',meta:'May 1 · Lead: A. Park',col:'#00D4FF'},
+  {action:'Fieldwork commenced',meta:'May 12 · 6 auditors',col:'#00D4FF'},
+  {action:'IT controls tested',meta:'May 28 · 44 controls',col:'#00D4FF'},
+  {action:'Draft findings issued',meta:'Jun 10 · 47 findings',col:'#FFB547'},
+  {action:'Management responses',meta:'Jun 20 · Partial',col:'#FFB547'},
+  {action:'Final report',meta:'Jul 15 · Pending',col:'#3A3F4A'},
+];
+const tl=document.getElementById('timeline');
+events.forEach(e=>{
+  const d=document.createElement('div'); d.className='tl-item';
+  d.innerHTML=`<div class="tl-line"><div class="tl-dot" style="background:${e.col}"></div><div class="tl-rule"></div></div>
+  <div class="tl-body"><div class="tl-action">${e.action}</div><div class="tl-meta">${e.meta}</div></div>`;
+  tl.appendChild(d);
+});
+
+// ── Auditors ──
+const aud=[
+  {name:'Akira Park',role:'Lead Auditor',status:'Active'},
+  {name:'Jana Walsh',role:'IT Specialist',status:'Active'},
+  {name:'Luis Torres',role:'Financial',status:'Review'},
+  {name:'Keiko Müller',role:'Compliance',status:'Active'},
+];
+const ac=document.getElementById('auditors');
+aud.forEach(a=>{
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;align-items:center;gap:10px;';
+  d.innerHTML=`
+    <div style="width:28px;height:28px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--mono);color:var(--accent);flex-shrink:0">${a.name.split(' ').map(x=>x[0]).join('')}</div>
+    <div style="flex:1">
+      <div style="font-size:11px;font-weight:500">${a.name}</div>
+      <div style="font-size:9px;font-family:var(--mono);color:var(--sub)">${a.role}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:${a.status==='Active'?'var(--green)':'var(--amber)'};border:1px solid ${a.status==='Active'?'rgba(0,229,160,.25)':'rgba(255,181,71,.25)'};padding:2px 6px">${a.status}</div>
+  `;
+  ac.appendChild(d);
+});
+
+// ── Playback bar ──
+const DURATION=522; // 8:42 in seconds
+let elapsed=0, playing=true, speed=1;
+const speeds=[1,1.5,2,.5];
+let speedIdx=0;
+
+function fmtTime(s){
+  return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60|0).padStart(2,'0');
+}
+
+let lastTs=null;
+function tick(ts){
+  if(playing){
+    if(lastTs) elapsed=Math.min(elapsed+(ts-lastTs)/1000*speed,DURATION);
+    lastTs=ts;
+    const pct=(elapsed/DURATION)*100;
+    document.getElementById('scrubFill').style.width=pct+'%';
+    document.getElementById('scrubHead').style.left=pct+'%';
+    document.getElementById('elapsed').textContent=fmtTime(elapsed);
+  } else { lastTs=null; }
+  if(elapsed<DURATION) requestAnimationFrame(tick);
+  else { playing=false; document.getElementById('playBtn').classList.remove('active'); }
+}
+requestAnimationFrame(tick);
+
+document.getElementById('playBtn').onclick=()=>{ playing=true; document.getElementById('playBtn').classList.add('active'); document.getElementById('pauseBtn').classList.remove('active'); requestAnimationFrame(tick); };
+document.getElementById('pauseBtn').onclick=()=>{ playing=false; lastTs=null; document.getElementById('pauseBtn').classList.add('active'); document.getElementById('playBtn').classList.remove('active'); };
+document.getElementById('speedBtn').onclick=()=>{
+  speedIdx=(speedIdx+1)%speeds.length; speed=speeds[speedIdx];
+  document.getElementById('speedBtn').textContent=speed+'×';
+};
+
+// Scrub click
+document.getElementById('scrub').onclick=e=>{
+  const r=e.currentTarget.getBoundingClientRect();
+  elapsed=((e.clientX-r.left)/r.width)*DURATION;
+};
+</script>
+</body>
+</html>
